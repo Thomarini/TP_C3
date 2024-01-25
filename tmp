@@ -1,0 +1,374 @@
+import sys,os
+sys.path.append('C:\Program Files\Webots\lib\controller\python39')
+import math
+import time;
+from controller import *
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib
+from matplotlib import collections  as mc
+import random
+from scipy.spatial import cKDTree as KDTree
+from commande_moteur import *
+from target_librairie import *
+import copy
+
+robot = Supervisor()
+timestep = int(robot.getBasicTimeStep())
+
+keyboard = Keyboard()
+keyboard.enable(timestep)
+
+sign = lambda x: math.copysign(1, x)
+
+robot_node = robot.getFromDef("Thymio")
+
+current_state = np.zeros([8, 1])
+# z, x, theta, vitesse mot gauche, vitesse mot droit, capteurs proximités
+
+old_state = np.zeros([8, 1])
+old_state[2] = 0
+
+# Dimensions du robot
+e = 10.8 # entreaxe
+r = 2.105 # rayon roue
+
+# Parametres de la simulation
+affichage_traj = False
+
+affichage_erreur = True
+
+target = False
+
+controle_target = False
+
+controle_keyboard = True
+
+
+""" Fonctions de controle du robot """
+def up():
+    motor_left.setVelocity(velocity)
+    motor_right.setVelocity(velocity)
+
+def down():
+    motor_left.setVelocity(-velocity)
+    motor_right.setVelocity(-velocity)
+
+def left():
+    motor_left.setVelocity(-velocity)
+    motor_right.setVelocity(velocity)
+
+def right():
+    motor_left.setVelocity(velocity)
+    motor_right.setVelocity(-velocity)
+
+def stop():
+    motor_left.setVelocity(0)
+    motor_right.setVelocity(0)
+    
+    
+""" Fonctions de controle par clavier du robot"""
+def control(key):
+    if (key == Keyboard.UP):
+        up()
+    elif (key == Keyboard.DOWN):
+        down()
+    elif (key == Keyboard.LEFT):
+        left()
+    elif (key == Keyboard.RIGHT):
+        right()
+    elif (key == Keyboard.SHIFT+ord('C')):
+        stop()
+    else:
+        pass
+
+
+
+# Grandeurs associées aux différents affichages
+cmp_traj = 0
+list_pos_x, list_pos_y = [], []
+list_pos_x_true, list_pos_y_true = [], []
+
+cmp_erreur = 0
+list_err_x, list_err_y, list_err_theta, list_theta_real, list_theta_state = [], [], [], [], []
+list_x_real, list_x_state = [], []
+if (affichage_erreur == True):
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(11, 3))
+
+velocity = 1     
+
+motor_left = robot.getDevice("motor.left");
+motor_right = robot.getDevice("motor.right");
+
+motor_left.setPosition(float('inf'))
+motor_right.setPosition(float('inf'))
+
+motor_left.setVelocity(0)
+motor_right.setVelocity(0)
+
+# Initialisation des capteurs de proximités
+prox0 = robot.getDevice("prox.horizontal.0")
+prox0.enable(timestep)
+prox1 = robot.getDevice("prox.horizontal.1")
+prox1.enable(timestep)
+prox2 = robot.getDevice("prox.horizontal.2")
+prox2.enable(timestep)
+prox3 = robot.getDevice("prox.horizontal.3")
+prox3.enable(timestep)
+prox4 = robot.getDevice("prox.horizontal.4")
+prox4.enable(timestep)
+
+
+# Target dans le référentiel de la simulation
+list_target_x = [ 12.5,  62.5, 62.5, 37.5, 37.5, -62, -62.5, -12.5, -12.5, 12.5]
+list_target_z = [-12.5, -12.5, 62.5, 62.5, 12.5,12.5, -12.5, -12.5, -62.5, -62.5]
+
+"""list_target_x.reverse()
+list_target_z.reverse()"""
+
+# Initialisation de la position du robot dans le repère de la simulation avec la vérité de terrain
+robot_position = robot_node.getPosition()
+robot_rotation = robot_node.getOrientation()
+
+old_state[0] = robot_position[2]*100
+old_state[1] = robot_position[0]*100
+old_state[2] = math.atan2(robot_rotation[6], robot_rotation[0])
+
+current_state[0] = robot_position[2]*100
+current_state[1] = robot_position[0]*100
+
+# Pour l'affichage
+init_state = np.zeros([2,1])
+init_state[0] = robot_position[2]*100
+init_state[1] = robot_position[0]*100
+
+
+ # x, y, z mais dans le repère du monde
+
+# Visualisation des murs
+mur_y = -np.array([-75, 25, 25, 75, 75, 25, 25, -25, -25, -75, -75])
+mur_x = np.array([-75, -75, -25, -25, 25, 25, 75, 75, -25, -25, -75])
+
+mur_y2 = -np.array([-50, 0, 0, 50, 0, 0])
+mur_x2 = np.array([-50, -50, 0, 0, 0, 50])
+
+
+tmp2 = np.zeros([2,1])
+
+time_old = robot.getTime()
+
+# Marge de maneuvre pour la commande 
+epsi = 0.001
+epsi2 = 0.01     
+
+# Etat du robot lors de l'assignation de la cible
+state_target_set = np.zeros([3, 1])
+
+# Numéro de la cible dans la liste
+index_target = 0
+
+def whereIsTarget(index_target):
+    robot_position = robot_node.getPosition()
+    robot_rotation = robot_node.getOrientation()
+    target_x = list_target_x[index_target]
+    target_z = list_target_z[index_target]
+    
+    print("Target dans ref simu: ", target_x, target_z)
+    print("Angle du robot : ", current_state[2]*180/np.pi)
+    # current_state[2] = math.atan2(robot_rotation[6], robot_rotation[0])
+    
+    new_target_x, new_target_z = changementRepere(target_x, target_z, current_state)
+    
+    print("Target dans ref robot: ", new_target_x, new_target_z)
+    
+    print("Robot dans ref simu: ", current_state[1][0], current_state[0][0])
+    print("Robot true dans ref simu: ", robot_position[0]*100, robot_position[2]*100)
+    
+    new_angle = math.atan2(new_target_z, new_target_x)-np.pi/2
+    
+    """# Premier quadran
+    if (new_target_z > 0 and new_target_x > new_target_z):
+        new_angle = np.pi/2-math.atan(new_target_x/new_target_z) 
+    if (new_target_x > 0 and new_target_z > new_target_x):
+        new_angle = math.atan(new_target_z/new_target_x)
+        
+    # Deuxième quadran
+    if (new_target_z < 0 and new_target_x > 0 and abs(new_target_z) > new_target_x):
+        new_angle = np.pi + math.atan(new_target_x/new_target_z) 
+    if (new_target_z < 0 and new_target_x > 0 and abs(new_target_z) < new_target_x):
+        new_angle = np.pi/2-math.atan(new_target_x/new_target_z)
+    
+    # Troisième quadran
+    if (new_target_z < 0 and new_target_x < 0 and abs(new_target_z) > abs(new_target_x)):
+        new_angle = 3/4*np.pi - math.atan(new_target_z/new_target_x)
+    if (new_target_z < 0 and new_target_x < 0 and abs(new_target_z) < abs(new_target_x)):
+        new_angle = np.pi + math.atan(new_target_x/new_target_z)
+        
+    # Quatrième quadran
+    if (new_target_z > 0 and new_target_x < 0 and abs(new_target_z) > abs(new_target_x)):
+        new_angle = 2*np.pi + math.atan(new_target_x/new_target_z)
+    if (new_target_z < 0 and new_target_x < 0 and abs(new_target_z) < abs(new_target_x)):
+        new_angle = 3/4*np.pi - math.atan(new_target_z/new_target_x)"""
+    
+    print("angle de rotation :", new_angle*180/np.pi)    
+    
+    #new_angle = (new_angle + np.pi)%(2*np.pi)-np.pi
+    
+    distanceToTarget =  np.sqrt((target_x-current_state[1])**2 + (target_z-current_state[0])**2)
+    state_target_set[2] = copy.deepcopy(current_state[2])
+    state_target_set[0] = copy.deepcopy(current_state[0])
+    
+    return new_angle, distanceToTarget, new_target_x, new_target_z
+
+# Lancement 
+if (controle_target == True):
+    new_angle, distanceToTarget, new_target_x, new_target_z = whereIsTarget(index_target)
+    distanceTravelledToTarget = 0
+   
+
+
+while (robot.step(timestep) != -1): #Appel d'une étape de simulation
+    # Calcul de l'intervalle de temps 
+    # Pourquoi ne pas juste utiliser timestep ?
+    time_new = robot.getTime()
+    dt = time_new - time_old
+    time_old = time_new
+    
+    # Utilisation du clavier
+    if (controle_keyboard == True):
+        key = keyboard.getKey()
+        control(key)    
+        
+    # Réalité de terrain sur la position du robot
+    robot_position = robot_node.getPosition() 
+    robot_rotation = robot_node.getOrientation()    
+    robot_orientation = math.atan2(robot_rotation[6], robot_rotation[0])
+    #print(robot_orientation*180/np.pi, current_state[2]*180/np.pi)
+    current_state[2] = robot_orientation
+    
+    
+    # Actualisation des valeurs des capteurs de proximité
+    current_state[5], current_state[6], current_state[7] = prox0.getValue(), prox2.getValue(), prox4.getValue(), 
+    current_state[3], current_state[4] = motor_left.getVelocity()*r, motor_right.getVelocity()*r
+    
+    # Calcul de la nouvelle position  
+    tmp2[0] = (current_state[3]*dt + current_state[4]*dt)/2
+    tmp2[1] = (current_state[3]*dt - current_state[4]*dt)/e
+    
+    current_state[0] = old_state[0] + tmp2[0]*np.cos(old_state[2] + tmp2[1]/2)
+    current_state[1] = old_state[1] + tmp2[0]*np.sin(old_state[2] + tmp2[1]/2) 
+    current_state[2]  = (old_state[2] + tmp2[1] + np.pi)%(2*np.pi)-np.pi
+    #print(current_state[0], current_state[1], current_state[2]*180/np.pi)
+    #print(current_state[1], sign(-tmp2[0]*np.sin(old_state[2] + tmp2[1]/2)), old_state[1])
+    robot_position = robot_node.getPosition()
+    
+    #current_state[0] = robot_position[2]*100
+    #current_state[1] = robot_position[0]*100
+
+
+
+    # Deplacement vers une cible
+
+    if (controle_target == True): 
+        #print( new_angle*180/np.pi, current_state[2]*180/np.pi)
+        if (new_angle - current_state[2] < -epsi2):
+            left()
+        elif (new_angle - current_state[2] > epsi2):
+            right()
+        else:    
+            #print((distanceToTarget), distanceTravelledToTarget)
+            if ((distanceToTarget - epsi) > distanceTravelledToTarget ):
+                up()
+                distanceTravelledToTarget += tmp2[0]
+            else:
+                stop()
+                #print(index_target)
+                distanceToTarget = 0
+                distanceTravelledToTarget = 0
+                index_target += 1
+                new_angle, distanceToTarget, new_target_x, new_target_z = whereIsTarget(index_target)
+
+
+    # Actualisation du vecteur d'état
+    old_state = copy.deepcopy(current_state)
+    
+    
+    if (cmp_traj == 50):  
+
+        plt.ion()
+        plt.plot(list_pos_x, list_pos_y, "r")
+        #plt.plot(list_pos_x_true, list_pos_y_true, "y")
+        plt.plot(-new_target_x-current_state[1], new_target_z+current_state[0], 'y+')
+        plt.plot(-new_target_x, new_target_z, 'y*')
+        # plt.plot(-target_x, target_z, "y+")        
+        plt.plot(mur_x, mur_y, '0.4')
+        plt.plot(mur_x2, mur_y2, '0.4')
+        
+        plt.plot(-current_state[1], current_state[0], "b+")        
+        plt.plot([-x for x in list_target_x], list_target_z, "r+")
+        plt.draw()        
+        plt.pause(0.001)    
+        plt.clf()
+        cmp_traj = 0      
+    cmp_traj += 1
+      
+      
+    # Affichage de la trajectoire calculé et de la réalité de terrain
+    if (affichage_traj == True) :            
+        list_pos_x.append(old_state[0].tolist()[0])
+        list_pos_y.append(-old_state[1].tolist()[0])
+        list_pos_x_true.append(robot_position[2]*100)
+        list_pos_y_true.append(robot_position[0]*100)        
+        if (cmp_traj == 50):            
+            plt.ion()
+            plt.plot(list_pos_x, list_pos_y, "r")
+            plt.plot(list_pos_x_true, list_pos_y_true, "y")
+            plt.plot(mur_x, mur_y, '0.4')
+            plt.plot(mur_x2, mur_y2, '0.4')
+            plt.draw()        
+            plt.pause(0.001)    
+            plt.clf()
+            cmp_traj = 0      
+        cmp_traj += 1
+        
+    if (affichage_erreur == True):
+        #list_err_x.append(np.sqrt((max(old_state[0].tolist()[0]**2, (robot_position[2]*100)**2) - min(old_state[0].tolist()[0]**2, (robot_position[2]*100)**2))))
+        list_err_y.append(old_state[0].tolist()[0]-robot_position[2]*100)
+        #list_err_y.append(np.sqrt((max(old_state[1].tolist()[0]**2, (robot_position[0]*100)**2) - min(old_state[1].tolist()[0]**2, (robot_position[0]*100)**2))))
+        list_err_x.append(old_state[1].tolist()[0]-robot_position[0]*100)
+        list_x_state.append(old_state[1].tolist()[0])
+        list_x_real.append(robot_position[0]*100)
+        list_err_theta.append(robot_orientation*180/np.pi-((old_state[2]*180/np.pi + 180)%360-180))
+        list_theta_real.append(robot_orientation*180/np.pi)
+        list_theta_state.append((old_state[2]*180/np.pi + 180)%360-180)
+        
+        if (cmp_erreur == 200): 
+            iteration = np.arange(len(list_err_x))             
+            plt.ion()        
+                
+            #ax1.plot(iteration, list_x_state, "y")
+            #ax1.plot(iteration, list_x_real, "r")
+            #ax1.legend(["x vrai", "x mesure"], loc='upper left')
+            
+            ax1.plot(iteration, list_err_x, "b")
+            ax1.legend(["erreur x"], loc='upper left')
+            
+            ax2.plot(iteration, list_err_y, "g")
+            ax2.legend(["erreur z"], loc='upper left')
+            
+            ax3.plot(iteration, list_err_theta, "b")
+            ax3.legend(["erreur theta"], loc='upper left')
+            #ax3.plot(iteration, list_theta_real, "y")
+            #ax3.plot(iteration, list_theta_state, "r")
+            #ax3.legend(["vrai", "mesure"], loc='upper left')            
+            plt.tight_layout()            
+            plt.draw()        
+            plt.pause(0.001)  
+            ax1.clear()
+            ax2.clear()
+            ax3.clear()
+            cmp_erreur = 0      
+        cmp_erreur += 1
+        
+        
+    
