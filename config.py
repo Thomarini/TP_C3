@@ -5,7 +5,7 @@
 from controller import *
 
 """ Paramètres d'utilisation du main """
-controle_keyboard = True # If true, autorise le controle du robot par l'utilisation du clavier
+controle_keyboard = False # If true, autorise le controle du robot par l'utilisation du clavier
 
 controle_target = True # If true, robot goes from one target to the next on his own
 
@@ -13,8 +13,13 @@ display_target = True # If true, affiche les targets visées successivement par 
 
 display_trajectory = False  # If true, affiche la trajectoire parcourue et 
                             # la trajectoire supposément parcourue
+     
+display_error = False # If true, affiche la différence entre l'état supposé et la réalité
+                     # de terrain 
                             
 reversePathing = False # If true, traverser le parcours dans le sens horaire
+
+
 
 """ Paramètres de débuggage du main """ 
 
@@ -23,6 +28,8 @@ display_debug = False # If true, affiche toutes les informations utiles
 
 display_target_debug = True # If true, affiche la position de la prochaine cible 
                             # dans le référentiel du robot et de la simu 
+                            
+
                             
  
 """ Initialisation des objets associés utiles à la simulations """
