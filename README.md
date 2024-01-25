@@ -12,5 +12,6 @@ Project is created with:
 * WeBot version: R2021b
 	
 ## HowToUse
-"config.py" has parameters stating what the main.py is used for. Some parameters may be incompatibles.
+*"config.py" has parameters stating what the main.py is used for. 
+*Some parameters may be incompatibles.
 Keyboard control is done with the cursor control keys.
