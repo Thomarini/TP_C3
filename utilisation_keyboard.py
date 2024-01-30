@@ -1,6 +1,8 @@
 """ Fonctions de controle par clavier du robot"""
 
-from config import keyboard, Keyboard, velocity
+from config import keyboard, Keyboard
+import config
+velocity = config.velocity
 from commande_moteur import up, left, down, right, stop
 
 def control():

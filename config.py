@@ -3,37 +3,41 @@
 """
 
 from controller import *
+import numpy as np
 
-""" Paramètres d'utilisation du main """
-controle_keyboard = False # If true, autorise le controle du robot par l'utilisation du clavier
+""" Utilisation du main """
+controle_keyboard = True    # If true, autorise le controle du robot par l'utilisation du clavier
+controle_target = False     # If true, robot goes from one target to the next on his own
+reversePathing = False      # If true, traverser le parcours dans le sens horaire
+lidar_enable = True         # If true, utilise le lidar pour la lecture de données
+use_tempo_ICP = True        # If true, way for $tempo_ICP before using ICP algorithm
+corr_state_lidar = True     # If true, use the lidar every $use_tempo_ICP to change robot state
+                            # to ICP estimated state
 
-controle_target = True # If true, robot goes from one target to the next on his own
-
-display_target = True # If true, affiche les targets visées successivement par le robot
-
-display_trajectory = False  # If true, affiche la trajectoire parcourue et 
+""" Display souhaités """
+display_target = False      # If true, affiche les targets visées successivement par le robot
+display_trajectory = True  # If true, affiche la trajectoire parcourue et 
                             # la trajectoire supposément parcourue
-     
-display_error = False # If true, affiche la différence entre l'état supposé et la réalité
-                     # de terrain 
-                            
-reversePathing = False # If true, traverser le parcours dans le sens horaire
+display_error = False       # If true, affiche la différence entre l'état supposé et la réalité
+                            # de terrain 
 
+display_lidar_polar = False # If true, display les données lidar en polaire
+display_lidar_true = False   # If true, display les données lidar ramené dans le repère de la simu avec 
+                            # LA
+display_lidar = False       # If true, display les points lidars sans correction
+display_lidar_corr = False  # If true, display les points lidar après correction par méthode
+                            # ICP (Iterated Closest Points)
+display_wall = True        # If true, display les murs
 
+display_pos_odo = True     # If true, display la position estimé du robot par odométrie
+display_true_pos = True    # If true, display la position réelle du robot
 
-""" Paramètres de débuggage du main """ 
+""" Paramètres de débuggage du main """   
+display_debug = False           # If true, affiche toutes les informations utiles
+display_target_debug = False    # If true, affiche la position de la prochaine cible 
+                                # dans le référentiel du robot et de la simu 
 
-display_debug = False # If true, affiche toutes les informations utiles
-
-
-display_target_debug = True # If true, affiche la position de la prochaine cible 
-                            # dans le référentiel du robot et de la simu 
-                            
-
-                            
- 
-""" Initialisation des objets associés utiles à la simulations """
-
+""" Initialisation des modules """   
 robot = Supervisor()
 timestep = int(robot.getBasicTimeStep())
 
@@ -43,22 +47,86 @@ keyboard.enable(timestep)
 
 robot_node = robot.getFromDef("Thymio")
 
-motor_left = robot.getDevice("motor.left");
-motor_right = robot.getDevice("motor.right");
+motor_left = robot.getDevice("motor.left")
+motor_right = robot.getDevice("motor.right")
 
-global velocity # En théorie ca rend vélocité modifiable depuis main. En pratique je n'y arrive pas.
-velocity = 1
+lidar2 = robot.getDevice('lidar')
+lidar2.enable(timestep)
+lidar2.enablePointCloud()
 
 
-# TODO trouver mieux
-epsi_rotation = 0.001  # variation autorisé autour de l'angle cible en rad
-epsi_rotation_max = 0.05 # ecart max entre l'angle de la target et le cap du robot
+""" Grandeurs statiques """   
+# Longueur de l'état 
+len_state = 11
+# z, x, theta, vitesse mot gauche, vitesse mot droite, z_real, x_real, theta_real, z_ICP, x_ICP, theta_ICP
 
-epsi_translation = 0.001 # variation autorisé autour de l'angle cible en rad
 
+# TODO: trouver mieux
+epsi_rotation = 0.001   # variation autorisé autour de l'angle cible en rad
+epsi_rotation_max = 0.05    # ecart max entre l'angle de la target et le cap du robot
+epsi_translation = 0.001    # variation autorisé autour de l'angle cible en rad
 
 # Dimensions du robot
-e = 10.8 # entre-axe
-r = 2.105 # rayon roue
+e = 10.8    # entre-axe
+r = 2.105   # rayon roue
+
+# Tempo sur l'utilisation du ICP
+tempo_ICP = 5       #s
+
+# Visualisation des murs
+mur_int_x = np.array([-50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -50, -49.0, -48.0, -47.0, -46.0, -45.0, -44.0, -43.0, -42.0, -41.0, -40.0, -39.0, -38.0, -37.0, -36.0, -35.0, -34.0, -33.0, -32.0, -31.0, -30.0, -29.0, -28.0, -27.0, -26.0, -25.0, -24.0, -23.0, -22.0, -21.0, -20.0, -19.0, -18.0, -17.0, -16.0, -15.0, -14.0, -13.0, -12.0, -11.0, -10.0, -9.0, -8.0, -7.0, -6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0, 34.0, 35.0, 36.0, 37.0, 38.0, 39.0, 40.0, 41.0, 42.0, 43.0, 44.0, 45.0, 46.0, 47.0, 48.0, 49.0, 50.0])
+mur_int_z = np.array([50, 49.0, 48.0, 47.0, 46.0, 45.0, 44.0, 43.0, 42.0, 41.0, 40.0, 39.0, 38.0, 37.0, 36.0, 35.0, 34.0, 33.0, 32.0, 31.0, 30.0, 29.0, 28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0, -8.0, -9.0, -10.0, -11.0, -12.0, -13.0, -14.0, -15.0, -16.0, -17.0, -18.0, -19.0, -20.0, -21.0, -22.0, -23.0, -24.0, -25.0, -26.0, -27.0, -28.0, -29.0, -30.0, -31.0, -32.0, -33.0, -34.0, -35.0, -36.0, -37.0, -38.0, -39.0, -40.0, -41.0, -42.0, -43.0, -44.0, -45.0, -46.0, -47.0, -48.0, -49.0, -50.0, -50, -49.0, -48.0, -47.0, -46.0, -45.0, -44.0, -43.0, -42.0, -41.0, -40.0, -39.0, -38.0, -37.0, -36.0, -35.0, -34.0, -33.0, -32.0, -31.0, -30.0, -29.0, -28.0, -27.0, -26.0, -25.0, -24.0, -23.0, -22.0, -21.0, -20.0, -19.0, -18.0, -17.0, -16.0, -15.0, -14.0, -13.0, -12.0, -11.0, -10.0, -9.0, -8.0, -7.0, -6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+mur_ext_x = np.array([-75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -74.0, -73.0, -72.0, -71.0, -70.0, -69.0, -68.0, -67.0, -66.0, -65.0, -64.0, -63.0, -62.0, -61.0, -60.0, -59.0, -58.0, -57.0, -56.0, -55.0, -54.0, -53.0, -52.0, -51.0, -50.0, -49.0, -48.0, -47.0, -46.0, -45.0, -44.0, -43.0, -42.0, -41.0, -40.0, -39.0, -38.0, -37.0, -36.0, -35.0, -34.0, -33.0, -32.0, -31.0, -30.0, -29.0, -28.0, -27.0, -26.0, -25.0, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -24.0, -23.0, -22.0, -21.0, -20.0, -19.0, -18.0, -17.0, -16.0, -15.0, -14.0, -13.0, -12.0, -11.0, -10.0, -9.0, -8.0, -7.0, -6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0, 34.0, 35.0, 36.0, 37.0, 38.0, 39.0, 40.0, 41.0, 42.0, 43.0, 44.0, 45.0, 46.0, 47.0, 48.0, 49.0, 50.0, 51.0, 52.0, 53.0, 54.0, 55.0, 56.0, 57.0, 58.0, 59.0, 60.0, 61.0, 62.0, 63.0, 64.0, 65.0, 66.0, 67.0, 68.0, 69.0, 70.0, 71.0, 72.0, 73.0, 74.0, 75.0, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 74.0, 73.0, 72.0, 71.0, 70.0, 69.0, 68.0, 67.0, 66.0, 65.0, 64.0, 63.0, 62.0, 61.0, 60.0, 59.0, 58.0, 57.0, 56.0, 55.0, 54.0, 53.0, 52.0, 51.0, 50.0, 49.0, 48.0, 47.0, 46.0, 45.0, 44.0, 43.0, 42.0, 41.0, 40.0, 39.0, 38.0, 37.0, 36.0, 35.0, 34.0, 33.0, 32.0, 31.0, 30.0, 29.0, 28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0, -1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0, -8.0, -9.0, -10.0, -11.0, -12.0, -13.0, -14.0, -15.0, -16.0, -17.0, -18.0, -19.0, -20.0, -21.0, -22.0, -23.0, -24.0, -25.0, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -26.0, -27.0, -28.0, -29.0, -30.0, -31.0, -32.0, -33.0, -34.0, -35.0, -36.0, -37.0, -38.0, -39.0, -40.0, -41.0, -42.0, -43.0, -44.0, -45.0, -46.0, -47.0, -48.0, -49.0, -50.0, -51.0, -52.0, -53.0, -54.0, -55.0, -56.0, -57.0, -58.0, -59.0, -60.0, -61.0, -62.0, -63.0, -64.0, -65.0, -66.0, -67.0, -68.0, -69.0, -70.0, -71.0, -72.0, -73.0, -74.0, -75.0, -75])
+mur_ext_z = np.array([75, 74.0, 73.0, 72.0, 71.0, 70.0, 69.0, 68.0, 67.0, 66.0, 65.0, 64.0, 63.0, 62.0, 61.0, 60.0, 59.0, 58.0, 57.0, 56.0, 55.0, 54.0, 53.0, 52.0, 51.0, 50.0, 49.0, 48.0, 47.0, 46.0, 45.0, 44.0, 43.0, 42.0, 41.0, 40.0, 39.0, 38.0, 37.0, 36.0, 35.0, 34.0, 33.0, 32.0, 31.0, 30.0, 29.0, 28.0, 27.0, 26.0, 25.0, 24.0, 23.0, 22.0, 21.0, 20.0, 19.0, 18.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0, -1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0, -8.0, -9.0, -10.0, -11.0, -12.0, -13.0, -14.0, -15.0, -16.0, -17.0, -18.0, -19.0, -20.0, -21.0, -22.0, -23.0, -24.0, -25.0, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -26.0, -27.0, -28.0, -29.0, -30.0, -31.0, -32.0, -33.0, -34.0, -35.0, -36.0, -37.0, -38.0, -39.0, -40.0, -41.0, -42.0, -43.0, -44.0, -45.0, -46.0, -47.0, -48.0, -49.0, -50.0, -51.0, -52.0, -53.0, -54.0, -55.0, -56.0, -57.0, -58.0, -59.0, -60.0, -61.0, -62.0, -63.0, -64.0, -65.0, -66.0, -67.0, -68.0, -69.0, -70.0, -71.0, -72.0, -73.0, -74.0, -75.0, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -75, -74.0, -73.0, -72.0, -71.0, -70.0, -69.0, -68.0, -67.0, -66.0, -65.0, -64.0, -63.0, -62.0, -61.0, -60.0, -59.0, -58.0, -57.0, -56.0, -55.0, -54.0, -53.0, -52.0, -51.0, -50.0, -49.0, -48.0, -47.0, -46.0, -45.0, -44.0, -43.0, -42.0, -41.0, -40.0, -39.0, -38.0, -37.0, -36.0, -35.0, -34.0, -33.0, -32.0, -31.0, -30.0, -29.0, -28.0, -27.0, -26.0, -25.0, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -25, -24.0, -23.0, -22.0, -21.0, -20.0, -19.0, -18.0, -17.0, -16.0, -15.0, -14.0, -13.0, -12.0, -11.0, -10.0, -9.0, -8.0, -7.0, -6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0, 34.0, 35.0, 36.0, 37.0, 38.0, 39.0, 40.0, 41.0, 42.0, 43.0, 44.0, 45.0, 46.0, 47.0, 48.0, 49.0, 50.0, 51.0, 52.0, 53.0, 54.0, 55.0, 56.0, 57.0, 58.0, 59.0, 60.0, 61.0, 62.0, 63.0, 64.0, 65.0, 66.0, 67.0, 68.0, 69.0, 70.0, 71.0, 72.0, 73.0, 74.0, 75.0, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75, 75])
+
+mur_x = np.append(mur_int_x, mur_ext_x)
+mur_z = np.append(mur_int_z, mur_ext_z)
+
+# Targets dans le référentiel de la simulation (point de passage pour parcourir le circuit
+list_target_x = [ 12.5,  62.5, 62.5, 37.5, 37.5, -62, -62.5, -12.5, -12.5, 12.5]
+list_target_z = [-12.5, -12.5, 62.5, 62.5, 12.5,12.5, -12.5, -12.5, -62.5, -62.5]
+
+if (reversePathing == True):
+    list_target_x.reverse()
+    list_target_z.reverse()
 
 
+
+def init_variable():
+    global velocity
+    velocity = 1
+    
+    # Etats du système 
+    global state
+    state = np.zeros([len_state, 1])
+    # z, x, theta, vitesse mot gauche, vitesse mot droite, z_real, x_real, theta_real, z_ICP, x_ICP, theta_ICP 
+
+    
+    # Compteur utilisé pour tempo l'affichage
+    global cpt_display
+    cpt_display = 0 # initialisé à 0 pour avoir la situation initiale
+
+    # Compteur utilisé pour le debug
+    global cpt_debug
+    cpt_debug = 0 # initialisé à 0 pour avoir la situation initiale
+
+    # Listes pour l'affichage de la trajectoire
+    global pos_z, pos_x, pos_z_true, pos_x_true, pos_x_lidar, pos_z_lidar
+    pos_z, pos_x, pos_z_true, pos_x_true, pos_x_lidar, pos_z_lidar = [], [], [], [], [], []
+    
+    # Listes des données lidar
+    global data_length
+    data_length = 1080  # pas possible de le garder statique
+    global list_lidar_x_corr, list_lidar_z_corr, list_lidar_x, list_lidar_z
+    global list_lidar_polar_x, list_lidar_polar_z, list_lidar_truth_x, list_lidar_truth_z
+    list_lidar_x_corr = np.zeros([data_length, 1])
+    list_lidar_z_corr = np.zeros([data_length, 1])
+    list_lidar_x = np.zeros([data_length, 1])
+    list_lidar_z = np.zeros([data_length, 1]) 
+    list_lidar_polar_x = np.zeros([data_length, 1]) 
+    list_lidar_polar_z = np.zeros([data_length, 1]) 
+    list_lidar_truth_x = np.zeros([data_length, 1]) 
+    list_lidar_truth_z = np.zeros([data_length, 1]) 
+    
+
+    

@@ -1,8 +1,10 @@
 """ Fonctions de controle du robot """
 
-from config import motor_left, motor_right, epsi_rotation, epsi_rotation_max, epsi_translation, velocity
+from config import motor_left, motor_right, epsi_rotation, epsi_rotation_max, epsi_translation
+import config
 from math import sqrt
- 
+
+velocity = config.velocity
 
 def up(velocity):
     motor_left.setVelocity(velocity)
