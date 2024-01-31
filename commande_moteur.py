@@ -30,7 +30,7 @@ def stop():
     
     
 def rotateToTarget(angleToTarget, state):
-    #TODO faire mieux - epsi trouvé expérimentalement 
+    #TODO: faire mieux - epsi trouvé expérimentalement 
     tmp = (sqrt(max(state[2]**2, angleToTarget**2) - min(state[2]**2, angleToTarget**2)))
     if (tmp < epsi_rotation_max):
         return True
@@ -47,7 +47,7 @@ def goToTarget(distanceToTarget, distanceTraveled, ds):
         distanceTraveled += ds
         up(velocity)
     return distanceTraveled
-    # TODO aller en arrière
+    # TODO: aller en arrière
     # elif (distanceToTarget - (stateToTarget[0]- state[0]) > epsi_translation):
     #    distanceToTarget -= ds
     

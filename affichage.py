@@ -11,47 +11,59 @@ def walls():
 
 def lidar_raw(legend, legend_color):
     # Visualisation des données brutes du lidar
+    
     plt.plot(config.list_lidar_x, config.list_lidar_z, "m+")
     legend += ['lidar in sim']
     legend_color += ['m']
+    
     return legend, legend_color
     
 def lidar_corr(legend, legend_color):
     # Visualisation des données fit sur la map du lidar    
+    
     plt.plot(config.list_lidar_x_corr, config.list_lidar_z_corr, "c+")
     legend += ['lidar corrected']
     legend_color += ['c']
+    
     return legend, legend_color
     
 def lidar_polar(legend, legend_color):
-    # Visualisation des données fit sur la map du lidar    
+    # Visualisation des données fit sur la map du lidar 
+
     plt.plot(config.list_lidar_polar_x*180/pi, config.list_lidar_polar_z*180/pi, "g+")
-    print(config.list_lidar_polar_x*180/pi)
-    print(config.list_lidar_polar_z*180/pi)
     legend += ['polar lidar']
     legend_color += ['g']
+    
     return legend, legend_color
     
 def lidar_true(legend, legend_color):
-    # Visualisation des données fit sur la map du lidar    
+    # Visualisation des données fit sur la map du lidar   
+
     plt.plot(config.list_lidar_truth_x, config.list_lidar_truth_z, "g+")
     legend += ['lidar in sim truth']
     legend_color += ['g']
+    
     return legend, legend_color
 
 
 
 
 def pos_odo(legend, legend_color):
+    # Visualisation de la position estimée par odométrie du robot
+    
     plt.plot(-state[1], state[0], "b+")
     legend += ['position odométrie']
     legend_color += ['b']
+    
     return legend, legend_color
 
 def pos_true(legend, legend_color):
+    # Visualisation de la position réelle du robot
+
     plt.plot(-state[6], state[5], "r+")
     legend += ['position réelle']
     legend_color += ['r']
+    
     return legend, legend_color
 
 
@@ -60,11 +72,11 @@ def trajectory(legend, legend_color):
     plt.plot(config.pos_x, config.pos_z, "b")    
     legend += ['trajectoire odométrie']
     legend_color += ['b']    
-        
+    
     plt.plot(config.pos_x_true, config.pos_z_true, "r")
     legend += ['trajectoire réelle']
     legend_color += ['r']  
-        
+    
     plt.plot(config.pos_x_lidar, config.pos_z_lidar, "g.")
     legend += ['point(s) ICP']
     legend_color += ['g']  
@@ -98,6 +110,8 @@ def display():
     if (display_lidar_true == True): legend, legend_color = lidar_true(legend, legend_color)
     if (display_lidar == True): legend, legend_color = lidar_raw(legend, legend_color)
     if (display_lidar_corr == True): legend, legend_color = lidar_corr(legend, legend_color)
+    
+    #TODO: 
     if (display_target == True): pass
     if (display_error == True): pass
     if (display_debug == True): pass

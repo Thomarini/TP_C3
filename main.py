@@ -83,52 +83,41 @@ while (robot.step(timestep) != -1):
     time_new = robot.getTime()
     dt = time_new - time_old
     time_old = time_new
-    
-    # Actualisation de la vérité de terrain
-    robot_position = robot_node.getPosition() 
-    robot_rotation = robot_node.getOrientation()    
-    robot_orientation = math.atan2(robot_rotation[6], robot_rotation[0])
 
-
-    ds, dtheta = updateEstimatedState(dt)    
-    updateRealState()
-    
-    
-        
-
-    
-    # Si controle au clavier
+    # Controle au clavier
     if (controle_keyboard == True):
         control()  
-    
+
+    # Odométrie
+    ds, dtheta = updateEstimatedState(dt)    
+    updateRealState()   
+
+    # lidar
     if (use_tempo_ICP == True):
         if (robot.getTime() - time_old_ICP >= tempo_ICP):
-                time_old_ICP = robot.getTime()
-                
-                if (lidar_enable == True):
-                    reqR, reqT, validity_check = getLidarData()
-                    # Gestion de l'erreur de manière brutale
-                    if (validity_check == True):
-                        translation_x, translation_z, theta = getRotationTranslationICP(reqR, reqT)
-                        updateCorrectedLidarData(reqR, reqT)
-                        updateLidarState(translation_x, translation_z, theta)
-                        updateTrajectoryLidar()
-                        
-                        display()
-                        print("====================")                        
-                        print(translation_z, translation_x, theta)
-                        print(config.state[0], config.state[1], config.state[2]*180/np.pi)
-                        print(config.state[5], config.state[6], config.state[7]*180/np.pi)
-                        print(config.state[8], config.state[9], config.state[10]*180/np.pi)
-                        updateRealStateWithLidar()
-                        
-                        
-                    else:
-                        print("olala erreur")
+            time_old_ICP = robot.getTime()
+            
+            if (lidar_enable == True):
+                reqR, reqT, validity_check = getLidarData()
+                # print(reqR, reqT)
+                # Gestion de l'erreur de manière brutale
+                if (validity_check == True):
+                    translation_x, translation_z, theta = getRotationTranslationICP(reqR, reqT)
+                    theta = (theta + np.pi)%(2*np.pi)-np.pi
+                    updateCorrectedLidarData(reqR, reqT)
+                    updateLidarState(translation_x, translation_z, theta)
+                    updateTrajectoryLidar()
+                    updateRealStateWithLidar()
+                    
+                    
+                else:
+                    print("olala erreur")
+                    
+            # TODO: séparer la latence d'affichage du lidar        
+            display()
                     
     if (display_trajectory == True):
         # Doit être placé après toutes les updates du vecteur d'état
         updateTrajectory()
-        
-        
-#============================================================================================================        
+
+#============================================================================================================       

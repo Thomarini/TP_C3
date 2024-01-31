@@ -35,22 +35,24 @@ def updateRealState():
     config.state[7] = atan2(robot_rotation[6], robot_rotation[0])
 
 def updateTrajectory():
+    """ Update la trajectoire réelle et estimée du robot """ 
     config.pos_z.append(config.state[0][0])
     config.pos_x.append(-config.state[1][0])
     config.pos_z_true.append(config.state[5][0])
     config.pos_x_true.append(-config.state[6][0])
 
 def updateTrajectoryLidar():
+    """ Update la listre des données lidar """ 
     config.pos_z_lidar.append(config.state[8][0])
     config.pos_x_lidar.append(-config.state[9][0])
 
 def updateLidarState(translation_x, translation_z, theta):
     """ Update la position supposé du robot corrigé avec le ICP"""   
-
     config.state[8] = config.state[0] + translation_z
-    config.state[9] = config.state[1] + translation_x
-    config.state[10] = (config.state[2] - theta -pi/2 + pi)%(2*pi)-pi
+    config.state[9] = config.state[1] - translation_x
+    config.state[10] = (config.state[2] - theta + pi)%(2*pi)-pi
     
 def updateRealStateWithLidar():
+    """ Update la position supposée du robot avec l'ICP """ 
     config.state[0], config.state[1] = config.state[8], config.state[9]
-    # config.state[2] = config.state[10]
+    config.state[2] = config.state[10]
