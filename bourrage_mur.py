@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import copysign
 
+""" Whole code could have used np.interp which whould have been easier and shorter """
 
 sign = lambda x: copysign(1, x)
 
