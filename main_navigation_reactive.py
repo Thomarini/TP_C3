@@ -123,11 +123,16 @@ while (robot.step(timestep) != -1):
             tmp = [i*sin(angle), i*cos(angle)] 
             if math.isnan(tmp[0]): tmp[0] = inf
 
-            if ((pi/2 + pi/4 > angle) or (angle > 3*pi/2 - pi/4)): 
+            # Récupération des points d'interets "devant" le robot
+            if ((pi/2 + pi/8 > angle) or (angle > 3*pi/2 - pi/8)): 
                 x_lidar.append(tmp[0])
                 y_lidar.append(tmp[1])
-                if ((threshold_dist < i) and (i < inf)):
-                    
+                
+                
+                # Traitement uniquement sur certaines données
+                if ((threshold_dist < i) and (i < inf)):        
+                    # Classification des murs entre la classe "murs gauche" et
+                    # "mur droite"
                     if (tmp[0] > 0) : 
                         x_right.append(tmp[0])
                         y_right.append(tmp[1])
@@ -138,6 +143,8 @@ while (robot.step(timestep) != -1):
                     
             angle += 2*pi/lidar.getHorizontalResolution()
         
+        
+        # Utilisation des points lointains sur les deux murs et utilisation de "centre" de classe 
         
         # Du fait de l'ordre de remplissage des listes qui suit le sens trigo, on inverse la sous liste récupérée 
         # pour garder la cohérence sur la distance entre le robot et les points représentatif des murs
@@ -154,31 +161,42 @@ while (robot.step(timestep) != -1):
         x_left = sum(x_left[tmp:])/cpt_left
         y_left = sum(y_left[tmp:])/cpt_left
         
-        
+        # Calcul de la cible obtenu au milieu des deux points d'intérets
         x_middle = (x_right + x_left)/2
         y_middle = (y_right + y_left)/2
         
+        # Angle à faire pour aller sur la target
         angleToTarget = atan2(x_middle, y_middle)
         
+        # Commande du robot avec des seuils pour limiter les oscillations sur place
         if (angleToTarget < -epsi_angle): 
             left(config.velocity)
         elif (angleToTarget > epsi_angle): 
             right(config.velocity)
         elif (-epsi_angle < angleToTarget < epsi_angle ):
             up(config.velocity)
-            
+        
+        # Débug
         else:
             stop()
             print("error for : ", angleToTarget)
         
+        # Affichage
         if (cpt_lidar == 0):            
             cpt_lidar = 25
             plt.ion() 
+            
+            # Données lidar
             plt.plot(x_lidar, y_lidar, "b+")
             
+            # centre des classes de mur
             plt.plot(x_right, y_right, "r*")
             plt.plot(x_left, y_left, "r*")
+            
+            # Position du robot
             plt.plot(0, 0, "m+")
+            
+            # Target
             plt.plot(x_middle, y_middle, "g*")
         
             legend = ['lidar', 'centre_droit', 'centre_gauche','robot', 'target']
@@ -190,35 +208,6 @@ while (robot.step(timestep) != -1):
             plt.clf()    
             
         cpt_lidar -= 1 
-
-        """ updateRealState()
-        if (cpt_lidar == 0):
-            cpt_lidar = 500
-            display()
-        cpt_lidar -= 1 """
-    """ # Odométrie
-    ds, dtheta = updateEstimatedState(dt)    
-    updateRealState()   
-    """
-
-    """ # lidar
-    if (use_tempo_ICP == True):
-        if (robot.getTime() - time_old_ICP >= tempo_ICP):
-            time_old_ICP = robot.getTime()
-            
-            if (lidar_enable == True):
-                reqR, reqT, validity_check = getLidarData()
-                # Gestion de l'erreur de manière brutale
-                if (validity_check == True):
-                    translation_x, translation_z, theta = getRotationTranslationICP(reqR, reqT)
-                    theta = (theta + np.pi)%(2*np.pi)-np.pi
-                    updateCorrectedLidarData(reqR, reqT)
-                    updateLidarState(translation_x, translation_z, theta)
-                    updateTrajectoryLidar()
-                    updateRealStateWithLidar()
-                    
-            # TODO: séparer la latence d'affichage du lidar        
-            display() """
                     
     if (display_trajectory == True):
         # Doit être placé après toutes les updates du vecteur d'état
